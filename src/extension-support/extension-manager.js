@@ -63,6 +63,8 @@ const builtinDevices = {
     arduinoRaspberryPiPico2: () => require('../devices/arduinoRaspberryPiPico2/arduinoRaspberryPiPico2'),
     // Raspberry Pi Pico 2W
     arduinoRaspberryPiPico2W: () => require('../devices/arduinoRaspberryPiPico2W/arduinoRaspberryPiPico2W'),
+    // Mieo
+    mieo: () => require('../devices/mieo/mieo'),
     // Microbit
     microbit: () => require('../devices/microbit/microbit'),
     microbitV2: () => require('../devices/microbit/microbitV2')
