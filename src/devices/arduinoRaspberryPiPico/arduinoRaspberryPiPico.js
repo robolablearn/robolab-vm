@@ -779,7 +779,7 @@ class OpenBlockArduinoRaspberryPiPicoDevice {
                             },
                             VALUE: {
                                 type: ArgumentType.STRING,
-                                defaultValue: 'Hello OpenBlock'
+                                defaultValue: 'Hello Robolab'
                             },
                             EOL: {
                                 type: ArgumentType.STRING,
