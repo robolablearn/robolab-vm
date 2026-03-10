@@ -290,6 +290,11 @@ class ArduinoPeripheral{
      * @private
      */
     _startHeartbeat () {
+        // Skip Firmata initialization if device disables realtime mode
+        if (this.diveceOpt && this.diveceOpt.disableRealtime) {
+            return;
+        }
+
         if (this._runtime.isRealtimeMode()) {
             // eslint-disable-next-line no-negated-condition
             if (!this._firmata) {
@@ -405,6 +410,9 @@ class ArduinoPeripheral{
      */
     _onConnect () {
         this._serialport.read(this._onMessage);
+
+        this._runtime.removeListener(this._runtime.constructor.PROGRAM_MODE_UPDATE, this._handleProgramModeUpdate);
+        this._runtime.removeListener(this._runtime.constructor.PERIPHERAL_UPLOAD_SUCCESS, this._startHeartbeat);
 
         this._startHeartbeat();
 

@@ -1,37 +1,64 @@
-/**
- * Mieo Device
- *
- * @overview An Arduino Uno compatible custom board with MIEO-specific
- * peripherals: LED matrix display, motors, sensors, buzzer, line follower,
- * ultrasonic, bluetooth, and serial communication.
- */
+const formatMessage = require('format-message');
+
 const ArgumentType = require('../../extension-support/argument-type');
 const BlockType = require('../../extension-support/block-type');
+const ProgramModeType = require('../../extension-support/program-mode-type');
 
 const ArduinoPeripheral = require('../common/arduino-peripheral');
 
+/**
+ * The list of USB device filters.
+ * @readonly
+ */
 const PNPID_LIST = [
-    'USB\\VID_1A86&PID_7523'
+    // USB VID/PID for Mieo board
+    // This should be updated with actual Mieo board VID/PID
+    'USB\\VID_1A86&PID_7523' // Using CH340 VID/PID as default for Arduino clones
 ];
 
+/**
+ * Configuration of serialport
+ * @readonly
+ */
 const SERIAL_CONFIG = {
     baudRate: 9600,
     dataBits: 8,
     stopBits: 1
 };
 
+/**
+ * Configuration for arduino-cli.
+ * @readonly
+ */
 const DIVECE_OPT = {
     type: 'arduino',
-    fqbn: 'arduino:avr:uno',
+    fqbn: 'arduino:avr:uno', // Using Arduino Uno as base for Mieo
     firmware: 'mieo.hex',
     defaultBaudrate: 9600,
     disableRealtime: true
 };
 
 const Pins = {
-    D0: '0', D1: '1', D2: '2', D3: '3', D4: '4', D5: '5', D6: '6',
-    D7: '7', D8: '8', D9: '9', D10: '10', D11: '11', D12: '12', D13: '13',
-    A0: 'A0', A1: 'A1', A2: 'A2', A3: 'A3', A4: 'A4', A5: 'A5'
+    D0: '0',
+    D1: '1',
+    D2: '2',
+    D3: '3',
+    D4: '4',
+    D5: '5',
+    D6: '6',
+    D7: '7',
+    D8: '8',
+    D9: '9',
+    D10: '10',
+    D11: '11',
+    D12: '12',
+    D13: '13',
+    A0: 'A0',
+    A1: 'A1',
+    A2: 'A2',
+    A3: 'A3',
+    A4: 'A4',
+    A5: 'A5'
 };
 
 const Level = {
@@ -54,22 +81,155 @@ const Eol = {
     NoWarp: 'noWarp'
 };
 
+const Mode = {
+    Input: 'INPUT',
+    Output: 'OUTPUT',
+    InputPullup: 'INPUT_PULLUP'
+};
+
+const InterrupMode = {
+    Rising: 'RISING',
+    Falling: 'FALLING',
+    Change: 'CHANGE',
+    Low: 'LOW'
+};
+
+const DataType = {
+    Char: 'char',
+    Byte: 'byte',
+    Int: 'int',
+    Long: 'long',
+    Float: 'float',
+    String: 'string'
+};
+
+const Direction = {
+    Forward: 'FORWARD',
+    Backward: 'BACKWARD',
+    Left: 'LEFT',
+    Right: 'RIGHT'
+};
+
+const Orientation = {
+    Horizontal: '0',
+    Vertical: '1'
+};
+
+const TouchPadChannel = {
+    T1: '0',
+    T2: '1'
+};
+
+const InfraredSensor = {
+    Left: 'A3',
+    Right: 'A2'
+};
+
+const MotorSide = {
+    Left: 'L',
+    Right: 'R'
+};
+
+const ServoPort = {
+    Servo1: '1',
+    Servo2: '2'
+};
+
+const UltrasonicPort = {
+    Port1: '1',
+    Port2: '2'
+};
+
+const BuzzerSong = {
+    HappyBirthday: 'HAPPY_BIRTHDAY',
+    JingleBells: 'JINGLE_BELLS',
+    WeWishYou: 'WE_WISH_YOU',
+    TwinkleTwinkle: 'TWINKLE_TWINKLE',
+    OdeToJoy: 'ODE_TO_JOY',
+    MaryHadALittleLamb: 'MARY_HAD_A_LITTLE_LAMB',
+    Startup: 'STARTUP',
+    Error: 'ERROR'
+};
+
+const BuzzerNote = {
+    C4: 'C4',
+    D4: 'D4',
+    E4: 'E4',
+    F4: 'F4',
+    G4: 'G4',
+    A4: 'A4',
+    B4: 'B4',
+    C5: 'C5',
+    D5: 'D5',
+    E5: 'E5',
+    F5: 'F5',
+    G5: 'G5',
+    A5: 'A5',
+    B5: 'B5',
+    C6: 'C6',
+    D6: 'D6',
+    E6: 'E6',
+    F6: 'F6',
+    G6: 'G6',
+    A6: 'A6',
+    B6: 'B6',
+    C7: 'C7',
+    D7: 'D7',
+    E7: 'E7',
+    F7: 'F7',
+    G7: 'G7',
+    A7: 'A7',
+    B7: 'B7'
+};
+
+const BuzzerDuration = {
+    Whole: '1',
+    Half: '2',
+    Quarter: '4',
+    Eighth: '8',
+    Sixteenth: '16'
+};
+
+const ToggleState = {
+    On: '1',
+    Off: '0'
+};
+
+const BluetoothButton = {
+    Up: 'F',
+    Down: 'B',
+    Right: 'R',
+    Left: 'L',
+    Triangle: 'T',
+    Cross: 'X',
+    Circle: 'C',
+    Square: 'S',
+    Start: 'A',
+    Pause: 'P'
+};
+
+/**
+ * Manage communication with a Mieo peripheral over a OpenBlock Link client socket.
+ */
 class OpenBlockMieoDevice {
-
-    get DEVICE_ID () {
-        return 'mieo';
-    }
-
+    /**
+     * Construct a Mieo communication object.
+     * @param {Runtime} runtime - the OpenBlock runtime
+     * @param {string} originalDeviceId - the original id of the peripheral, like xxx_mieo
+     */
     constructor (runtime, originalDeviceId) {
         this.runtime = runtime;
+
+        // Create Arduino peripheral for code upload
         this._peripheral = new ArduinoPeripheral(runtime, this.DEVICE_ID, originalDeviceId, PNPID_LIST, SERIAL_CONFIG, DIVECE_OPT);
 
+        // Initialize pin state
         this._pinState = {};
         Object.keys(Pins).forEach(pin => {
             this._pinState[Pins[pin]] = 0;
         });
 
-        // Bind all block handler methods
+        // Bind block handler methods to preserve 'this' context
         this.event_whenmieostartsup = this.event_whenmieostartsup.bind(this);
         this.mieo_setDigitalOutput = this.mieo_setDigitalOutput.bind(this);
         this.mieo_setDigitalPinHighLow = this.mieo_setDigitalPinHighLow.bind(this);
@@ -80,10 +240,8 @@ class OpenBlockMieoDevice {
         this.mieo_setPwmOutput = this.mieo_setPwmOutput.bind(this);
         this.mieo_setServoOutput = this.mieo_setServoOutput.bind(this);
         this.mieo_showEmotion = this.mieo_showEmotion.bind(this);
-        this.mieo_showEmotionFixed = this.mieo_showEmotionFixed.bind(this);
         this.mieo_displayText = this.mieo_displayText.bind(this);
         this.mieo_clearDisplay = this.mieo_clearDisplay.bind(this);
-        this.mieo_showNumberColor = this.mieo_showNumberColor.bind(this);
         this.mieo_runRobot = this.mieo_runRobot.bind(this);
         this.mieo_goForwardFor1s = this.mieo_goForwardFor1s.bind(this);
         this.mieo_setOrientation = this.mieo_setOrientation.bind(this);
@@ -94,7 +252,6 @@ class OpenBlockMieoDevice {
         this.mieo_setInfraredThreshold = this.mieo_setInfraredThreshold.bind(this);
         this.mieo_getInfraredValue = this.mieo_getInfraredValue.bind(this);
         this.mieo_runMotor = this.mieo_runMotor.bind(this);
-        this.mieo_stopMotor = this.mieo_stopMotor.bind(this);
         this.mieo_setServoAngle = this.mieo_setServoAngle.bind(this);
         this.mieo_setLineThresholds = this.mieo_setLineThresholds.bind(this);
         this.mieo_followLine = this.mieo_followLine.bind(this);
@@ -105,10 +262,8 @@ class OpenBlockMieoDevice {
         this.mieo_playTone = this.mieo_playTone.bind(this);
         this.mieo_buzzStop = this.mieo_buzzStop.bind(this);
         this.mieo_setupBluetooth = this.mieo_setupBluetooth.bind(this);
-        this.mieo_refreshBluetooth = this.mieo_refreshBluetooth.bind(this);
         this.mieo_toggleSwitch = this.mieo_toggleSwitch.bind(this);
         this.mieo_isBtButton = this.mieo_isBtButton.bind(this);
-        this.mieo_btStringEquals = this.mieo_btStringEquals.bind(this);
         this.mieo_putToTerminal = this.mieo_putToTerminal.bind(this);
         this.mieo_enableSerial = this.mieo_enableSerial.bind(this);
         this.mieo_writeSerial = this.mieo_writeSerial.bind(this);
@@ -117,219 +272,387 @@ class OpenBlockMieoDevice {
         this.mieo_readAsNumber = this.mieo_readAsNumber.bind(this);
     }
 
-    get DIGITAL_PINS_MENU () {
+    /**
+     * @return {string} - the ID of this extension.
+     */
+    get DEVICE_ID () {
+        return 'mieo';
+    }
+
+    /**
+     * Called by the runtime when user wants to upload code to a peripheral.
+     * @param {string} code - the code want to upload.
+     */
+    upload (code) {
+        return this._peripheral.upload(code);
+    }
+
+    /**
+     * Called by the runtime when user wants to program mode.
+     * @param {string} mode - the program mode.
+     */
+    setProgramMode (mode) {
+        return this._peripheral.setProgramMode(mode);
+    }
+
+    /**
+     * Generate pins menu.
+     * @return {Array} - the menu array.
+     */
+    get PINS_MENU () {
         return [
-            {text: '0', value: Pins.D0}, {text: '1', value: Pins.D1},
-            {text: '2', value: Pins.D2}, {text: '3', value: Pins.D3},
-            {text: '4', value: Pins.D4}, {text: '5', value: Pins.D5},
-            {text: '6', value: Pins.D6}, {text: '7', value: Pins.D7},
-            {text: '8', value: Pins.D8}, {text: '9', value: Pins.D9},
-            {text: '10', value: Pins.D10}, {text: '11', value: Pins.D11},
-            {text: '12', value: Pins.D12}, {text: '13', value: Pins.D13},
-            {text: 'A0', value: Pins.A0}, {text: 'A1', value: Pins.A1},
-            {text: 'A2', value: Pins.A2}, {text: 'A3', value: Pins.A3},
-            {text: 'A4', value: Pins.A4}, {text: 'A5', value: Pins.A5}
+            { text: '0', value: Pins.D0 },
+            { text: '1', value: Pins.D1 },
+            { text: '2', value: Pins.D2 },
+            { text: '3', value: Pins.D3 },
+            { text: '4', value: Pins.D4 },
+            { text: '5', value: Pins.D5 },
+            { text: '6', value: Pins.D6 },
+            { text: '7', value: Pins.D7 },
+            { text: '8', value: Pins.D8 },
+            { text: '9', value: Pins.D9 },
+            { text: '10', value: Pins.D10 },
+            { text: '11', value: Pins.D11 },
+            { text: '12', value: Pins.D12 },
+            { text: '13', value: Pins.D13 },
+            { text: 'A0', value: Pins.A0 },
+            { text: 'A1', value: Pins.A1 },
+            { text: 'A2', value: Pins.A2 },
+            { text: 'A3', value: Pins.A3 },
+            { text: 'A4', value: Pins.A4 },
+            { text: 'A5', value: Pins.A5 }
         ];
     }
 
+    /**
+     * Generate analog pins menu.
+     * @return {Array} - the menu array.
+     */
     get ANALOG_PINS_MENU () {
         return [
-            {text: 'A0', value: Pins.A0}, {text: 'A1', value: Pins.A1},
-            {text: 'A2', value: Pins.A2}, {text: 'A3', value: Pins.A3},
-            {text: 'A4', value: Pins.A4}, {text: 'A5', value: Pins.A5}
+            { text: 'A0', value: Pins.A0 },
+            { text: 'A1', value: Pins.A1 },
+            { text: 'A2', value: Pins.A2 },
+            { text: 'A3', value: Pins.A3 },
+            { text: 'A4', value: Pins.A4 },
+            { text: 'A5', value: Pins.A5 }
         ];
     }
 
-    get BOOL_DIGITAL_PINS_MENU () {
-        return [
-            {text: 'A0', value: 'A0'}, {text: 'A1', value: 'A1'},
-            {text: 'A2', value: 'A2'}, {text: 'A3', value: 'A3'},
-            {text: 'A4', value: 'A4'}, {text: 'A5', value: 'A5'},
-            {text: '2', value: '2'}, {text: '3', value: '3'},
-            {text: '4', value: '4'}, {text: '5', value: '5'},
-            {text: '6', value: '6'}, {text: '7', value: '7'},
-            {text: '8', value: '8'}, {text: '9', value: '9'},
-            {text: '10', value: '10'}, {text: '11', value: '11'},
-            {text: '12', value: '12'}, {text: '13', value: '13'}
-        ];
-    }
-
+    /**
+     * Generate pwm pins menu.
+     * @return {Array} - the menu array.
+     */
     get PWM_PINS_MENU () {
         return [
-            {text: '3', value: Pins.D3}, {text: '5', value: Pins.D5},
-            {text: '6', value: Pins.D6}, {text: '9', value: Pins.D9},
-            {text: '10', value: Pins.D10}, {text: '11', value: Pins.D11}
+            { text: '3', value: Pins.D3 },
+            { text: '5', value: Pins.D5 },
+            { text: '6', value: Pins.D6 },
+            { text: '9', value: Pins.D9 },
+            { text: '10', value: Pins.D10 },
+            { text: '11', value: Pins.D11 }
         ];
     }
 
+    /**
+     * Generate level menu.
+     * @return {Array} - the menu array.
+     */
     get LEVEL_MENU () {
         return [
-            {text: 'HIGH', value: Level.High},
-            {text: 'LOW', value: Level.Low}
+            { text: 'high', value: Level.High },
+            { text: 'low', value: Level.Low }
         ];
     }
 
+    /**
+     * Generate emoji menu.
+     * @return {Array} - the menu array.
+     */
     get EMOJI_MENU () {
         return [
-            {text: 'Smile', value: 'EMOJI_SMILE'},
-            {text: 'Sad', value: 'EMOJI_SAD'},
-            {text: 'Angry', value: 'EMOJI_ANGRY'},
-            {text: 'Cry', value: 'EMOJI_CRY'},
-            {text: 'Nerd', value: 'EMOJI_NERD'},
-            {text: 'Surprise', value: 'EMOJI_SURPRISE'},
-            {text: 'Think', value: 'EMOJI_THINK'},
-            {text: 'Dude', value: 'EMOJI_DUDE'},
-            {text: 'Heart', value: 'EMOJI_HEART'}
+            { text: 'smile', value: 'EMOJI_SMILE' },
+            { text: 'sad', value: 'EMOJI_SAD' },
+            { text: 'angry', value: 'EMOJI_ANGRY' },
+            { text: 'cry', value: 'EMOJI_CRY' },
+            { text: 'heart', value: 'EMOJI_HEART' },
+            { text: 'nerd', value: 'EMOJI_NERD' },
+            { text: 'surprise', value: 'EMOJI_SURPRISE' },
+            { text: 'think', value: 'EMOJI_THINK' },
+            { text: 'dude', value: 'EMOJI_DUDE' }
         ];
     }
 
-    get DIRECTION_MENU () {
-        return [
-            {text: 'forward', value: 'FORWARD'},
-            {text: 'backward', value: 'BACKWARD'},
-            {text: 'left', value: 'LEFT'},
-            {text: 'right', value: 'RIGHT'}
-        ];
-    }
-
+    /**
+     * Generate speed menu.
+     * @return {Array} - the menu array.
+     */
     get SPEED_MENU () {
         return [
-            {text: '50', value: '50'},
-            {text: '100', value: '100'},
-            {text: '150', value: '150'},
-            {text: '200', value: '200'},
-            {text: '255', value: '255'}
+            { text: 'fast', value: '125' },
+            { text: 'medium', value: '200' },
+            { text: 'slow', value: '300' }
         ];
     }
 
-    get ORIENTATION_MENU () {
+    /**
+     * Generate direction menu.
+     * @return {Array} - the menu array.
+     */
+    get DIRECTION_MENU () {
         return [
-            {text: '0', value: '0'},
-            {text: '1', value: '1'}
+            { text: 'forward', value: Direction.Forward },
+            { text: 'backward', value: Direction.Backward },
+            { text: 'left', value: Direction.Left },
+            { text: 'right', value: Direction.Right }
         ];
     }
 
-    get MOTOR_SIDE_MENU () {
-        return [
-            {text: 'left', value: 'L'},
-            {text: 'right', value: 'R'}
-        ];
-    }
-
-    get MOTOR_DIR_MENU () {
-        return [
-            {text: 'forward', value: 'FORWARD'},
-            {text: 'backward', value: 'BACKWARD'}
-        ];
-    }
-
+    /**
+     * Generate button menu.
+     * @return {Array} - the menu array.
+     */
     get BUTTON_MENU () {
         return [
-            {text: 'Button 1 (D7)', value: '7'},
-            {text: 'Button 2 (D8)', value: '8'}
+            { text: 'R', value: '7' },
+            { text: 'L', value: '8' }
         ];
     }
 
-    get TOUCH_MENU () {
+    /**
+     * Generate touchpad menu.
+     * @return {Array} - the menu array.
+     */
+    get TOUCHPAD_MENU () {
         return [
-            {text: 'Touch 0', value: '0'},
-            {text: 'Touch 1', value: '1'}
+            { text: 'T1', value: TouchPadChannel.T1 },
+            { text: 'T2', value: TouchPadChannel.T2 }
         ];
     }
 
-    get IR_MENU () {
+    /**
+     * Generate infrared menu.
+     * @return {Array} - the menu array.
+     */
+    get INFRARED_MENU () {
         return [
-            {text: 'IR Left (A3)', value: 'A3'},
-            {text: 'IR Right (A2)', value: 'A2'}
+            { text: 'IR-L', value: InfraredSensor.Left },
+            { text: 'IR-R', value: InfraredSensor.Right }
         ];
     }
 
-    get SERVO_MENU () {
+    /**
+     * Generate motor side menu.
+     * @return {Array} - the menu array.
+     */
+    get MOTOR_SIDE_MENU () {
         return [
-            {text: 'Servo 1 (D10)', value: '1'},
-            {text: 'Servo 2 (D9)', value: '2'}
+            { text: 'left', value: MotorSide.Left },
+            { text: 'right', value: MotorSide.Right }
         ];
     }
 
+    /**
+     * Generate motor direction menu.
+     * @return {Array} - the menu array.
+     */
+    get MOTOR_DIR_MENU () {
+        return [
+            { text: 'forward', value: Direction.Forward },
+            { text: 'backward', value: Direction.Backward }
+        ];
+    }
+
+    /**
+     * Generate ultrasonic menu.
+     * @return {Array} - the menu array.
+     */
     get ULTRASONIC_MENU () {
         return [
-            {text: 'Ultrasonic 1', value: '1'},
-            {text: 'Ultrasonic 2', value: '2'}
+            { text: '1', value: UltrasonicPort.Port1 },
+            { text: '2', value: UltrasonicPort.Port2 }
         ];
     }
 
-    get SONG_MENU () {
+    /**
+     * Generate ultrasonic pin menu.
+     * @return {Array} - the menu array.
+     */
+    get ULTRASONIC_PINS_MENU () {
         return [
-            {text: 'Happy Birthday', value: 'HAPPY_BIRTHDAY'},
-            {text: 'Jingle Bells', value: 'JINGLE_BELLS'},
-            {text: 'We Wish You', value: 'WE_WISH_YOU'},
-            {text: 'Twinkle Twinkle', value: 'TWINKLE_TWINKLE'},
-            {text: 'Ode to Joy', value: 'ODE_TO_JOY'},
-            {text: 'Mary Had a Little Lamb', value: 'MARY_HAD_A_LITTLE_LAMB'},
-            {text: 'Startup', value: 'STARTUP'},
-            {text: 'Error', value: 'ERROR'}
+            { text: 'D1', value: Pins.A5 },
+            { text: 'D2', value: Pins.A4 },
+            { text: 'A1', value: Pins.A0 },
+            { text: 'A2', value: Pins.A1 }
         ];
     }
 
-    get NOTE_MENU () {
+    /**
+     * Generate buzzer song menu.
+     * @return {Array} - the menu array.
+     */
+    get BUZZER_SONG_MENU () {
         return [
-            {text: 'C4', value: 'C4'}, {text: 'D4', value: 'D4'},
-            {text: 'E4', value: 'E4'}, {text: 'F4', value: 'F4'},
-            {text: 'G4', value: 'G4'}, {text: 'A4', value: 'A4'},
-            {text: 'B4', value: 'B4'}, {text: 'C5', value: 'C5'},
-            {text: 'D5', value: 'D5'}, {text: 'E5', value: 'E5'},
-            {text: 'F5', value: 'F5'}, {text: 'G5', value: 'G5'},
-            {text: 'A5', value: 'A5'}, {text: 'B5', value: 'B5'}
+            { text: 'happy birthday', value: BuzzerSong.HappyBirthday },
+            { text: 'jingle bells', value: BuzzerSong.JingleBells },
+            { text: 'we wish you', value: BuzzerSong.WeWishYou },
+            { text: 'twinkle twinkle', value: BuzzerSong.TwinkleTwinkle },
+            { text: 'ode to joy', value: BuzzerSong.OdeToJoy },
+            { text: 'mary had a little lamb', value: BuzzerSong.MaryHadALittleLamb },
+            { text: 'startup', value: BuzzerSong.Startup },
+            { text: 'error', value: BuzzerSong.Error }
         ];
     }
 
-    get DURATION_MENU () {
+    /**
+     * Generate buzzer note menu.
+     * @return {Array} - the menu array.
+     */
+    get BUZZER_NOTE_MENU () {
         return [
-            {text: '1', value: '1'}, {text: '2', value: '2'},
-            {text: '4', value: '4'}, {text: '8', value: '8'},
-            {text: '16', value: '16'}
+            { text: 'C4', value: BuzzerNote.C4 },
+            { text: 'D4', value: BuzzerNote.D4 },
+            { text: 'E4', value: BuzzerNote.E4 },
+            { text: 'F4', value: BuzzerNote.F4 },
+            { text: 'G4', value: BuzzerNote.G4 },
+            { text: 'A4', value: BuzzerNote.A4 },
+            { text: 'B4', value: BuzzerNote.B4 },
+            { text: 'C5', value: BuzzerNote.C5 },
+            { text: 'D5', value: BuzzerNote.D5 },
+            { text: 'E5', value: BuzzerNote.E5 },
+            { text: 'F5', value: BuzzerNote.F5 },
+            { text: 'G5', value: BuzzerNote.G5 },
+            { text: 'A5', value: BuzzerNote.A5 },
+            { text: 'B5', value: BuzzerNote.B5 },
+            { text: 'C6', value: BuzzerNote.C6 },
+            { text: 'D6', value: BuzzerNote.D6 },
+            { text: 'E6', value: BuzzerNote.E6 },
+            { text: 'F6', value: BuzzerNote.F6 },
+            { text: 'G6', value: BuzzerNote.G6 },
+            { text: 'A6', value: BuzzerNote.A6 },
+            { text: 'B6', value: BuzzerNote.B6 },
+            { text: 'C7', value: BuzzerNote.C7 },
+            { text: 'D7', value: BuzzerNote.D7 },
+            { text: 'E7', value: BuzzerNote.E7 },
+            { text: 'F7', value: BuzzerNote.F7 },
+            { text: 'G7', value: BuzzerNote.G7 },
+            { text: 'A7', value: BuzzerNote.A7 },
+            { text: 'B7', value: BuzzerNote.B7 }
         ];
     }
 
-    get BT_BUTTON_MENU () {
+    /**
+     * Generate buzzer duration menu.
+     * @return {Array} - the menu array.
+     */
+    get BUZZER_DURATION_MENU () {
         return [
-            {text: 'Up', value: 'F'}, {text: 'Down', value: 'B'},
-            {text: 'Right', value: 'R'}, {text: 'Left', value: 'L'},
-            {text: 'Triangle', value: 'T'}, {text: 'Cross', value: 'X'},
-            {text: 'Circle', value: 'C'}, {text: 'Square', value: 'S'},
-            {text: 'Start', value: 'A'}, {text: 'Pause', value: 'P'}
+            { text: 'whole', value: BuzzerDuration.Whole },
+            { text: 'half', value: BuzzerDuration.Half },
+            { text: 'quarter', value: BuzzerDuration.Quarter },
+            { text: 'eighth', value: BuzzerDuration.Eighth },
+            { text: 'sixteenth', value: BuzzerDuration.Sixteenth }
         ];
     }
 
-    get TOGGLE_MENU () {
+    /**
+     * Generate toggle state menu.
+     * @return {Array} - the menu array.
+     */
+    get TOGGLE_STATE_MENU () {
         return [
-            {text: 'ON', value: '1'},
-            {text: 'OFF', value: '0'}
+            { text: 'on', value: ToggleState.On },
+            { text: 'off', value: ToggleState.Off }
         ];
     }
 
+    /**
+     * Generate bluetooth button menu.
+     * @return {Array} - the menu array.
+     */
+    get BLUETOOTH_BUTTON_MENU () {
+        return [
+            { text: 'up', value: BluetoothButton.Up },
+            { text: 'down', value: BluetoothButton.Down },
+            { text: 'right', value: BluetoothButton.Right },
+            { text: 'left', value: BluetoothButton.Left },
+            { text: 'triangle', value: BluetoothButton.Triangle },
+            { text: 'cross', value: BluetoothButton.Cross },
+            { text: 'circle', value: BluetoothButton.Circle },
+            { text: 'square', value: BluetoothButton.Square },
+            { text: 'start', value: BluetoothButton.Start },
+            { text: 'pause', value: BluetoothButton.Pause }
+        ];
+    }
+
+    /**
+     * Generate servo menu.
+     * @return {Array} - the menu array.
+     */
+    get SERVO_MENU () {
+        return [
+            { text: 'servo 1', value: ServoPort.Servo1 },
+            { text: 'servo 2', value: ServoPort.Servo2 }
+        ];
+    }
+
+    /**
+     * Generate orientation menu.
+     * @return {Array} - the menu array.
+     */
+    get ORIENTATION_MENU () {
+        return [
+            { text: 'horizontal', value: Orientation.Horizontal },
+            { text: 'vertical', value: Orientation.Vertical }
+        ];
+    }
+
+    /**
+     * Generate baud rate menu.
+     * @return {Array} - the menu array.
+     */
     get BAUD_RATE_MENU () {
         return [
-            {text: '4800', value: Buadrate.B4800},
-            {text: '9600', value: Buadrate.B9600},
-            {text: '19200', value: Buadrate.B19200},
-            {text: '38400', value: Buadrate.B38400},
-            {text: '57600', value: Buadrate.B57600},
-            {text: '76800', value: Buadrate.B76800},
-            {text: '115200', value: Buadrate.B115200}
+            { text: '4800', value: Buadrate.B4800 },
+            { text: '9600', value: Buadrate.B9600 },
+            { text: '19200', value: Buadrate.B19200 },
+            { text: '38400', value: Buadrate.B38400 },
+            { text: '57600', value: Buadrate.B57600 },
+            { text: '76800', value: Buadrate.B76800 },
+            { text: '115200', value: Buadrate.B115200 }
         ];
     }
 
+    /**
+     * Generate serial end-of-line menu.
+     * @return {Array} - the menu array.
+     */
     get SERIAL_EOL_MENU () {
         return [
-            {text: 'warp', value: Eol.Warp},
-            {text: 'no-warp', value: Eol.NoWarp}
+            { text: 'new line', value: Eol.Warp },
+            { text: 'inline', value: Eol.NoWarp }
         ];
     }
 
+    /**
+     * Digital pin menu for boolean read (mapped to Arduino analog pins).
+     * @return {Array} - the menu array.
+     */
+    get BOOL_DIGITAL_PINS_MENU () {
+        return [
+            { text: 'D1', value: 'A5' },
+            { text: 'D2', value: 'A4' },
+            { text: 'A1', value: 'A0' },
+            { text: 'A2', value: 'A1' }
+        ];
+    }
+
+    /**
+     * Get info of the peripheral.
+     * @return {Array} - array of category objects with blocks.
+     */
     getInfo () {
         return [
-            // ---- Mieo I/O ----
             {
                 id: 'mieo',
                 name: 'Mieo',
@@ -388,7 +711,7 @@ class OpenBlockMieoDevice {
                 ],
                 menus: {
                     pins: {
-                        items: this.DIGITAL_PINS_MENU
+                        items: this.PINS_MENU
                     },
                     analogPins: {
                         items: this.ANALOG_PINS_MENU
@@ -416,24 +739,21 @@ class OpenBlockMieoDevice {
                     }
                 }
             },
-
-            // ---- Display ----
             {
                 id: 'mieodisplay',
                 name: 'Display',
                 color1: '#4CBFE6',
                 color2: '#2E8EB8',
                 color3: '#2E8EB8',
-
                 blocks: [
                     {
                         opcode: 'mieo_showEmotionFixed',
                         blockType: BlockType.COMMAND,
-                        text: 'show emotion [EMOJI]',
+                        text: 'show [EMOJI]',
                         arguments: {
                             EMOJI: {
                                 type: ArgumentType.STRING,
-                                menu: 'emojis',
+                                menu: 'emoji',
                                 defaultValue: 'EMOJI_SMILE'
                             }
                         }
@@ -441,107 +761,109 @@ class OpenBlockMieoDevice {
                     {
                         opcode: 'mieo_showEmotion',
                         blockType: BlockType.COMMAND,
-                        text: 'show [EMOJI] R [R] G [G] B [B]',
+                        text: 'show [EMOJI] color R [R] G [G] B [B]',
                         arguments: {
                             EMOJI: {
                                 type: ArgumentType.STRING,
-                                menu: 'emojis',
+                                menu: 'emoji',
                                 defaultValue: 'EMOJI_SMILE'
                             },
                             R: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '150'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 150
                             },
                             G: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '100'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 100
                             },
                             B: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '0'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 0
                             }
                         }
                     },
                     {
                         opcode: 'mieo_showNumberColor',
                         blockType: BlockType.COMMAND,
-                        text: 'show number [NUMBER] R [R] G [G] B [B]',
+                        text: 'show number [NUMBER] color R [R] G [G] B [B]',
                         arguments: {
                             NUMBER: {
                                 type: ArgumentType.NUMBER,
-                                defaultValue: '0'
+                                defaultValue: 0
                             },
                             R: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '255'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 255
                             },
                             G: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '0'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 0
                             },
                             B: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '0'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 0
                             }
                         }
                     },
                     {
                         opcode: 'mieo_displayText',
                         blockType: BlockType.COMMAND,
-                        text: 'display text [TEXT] R [R] G [G] B [B] speed [SPEED]',
+                        text: 'show [TEXT] color R [R] G [G] B [B] speed [SPEED]',
                         arguments: {
                             TEXT: {
                                 type: ArgumentType.STRING,
                                 defaultValue: 'hi'
                             },
                             R: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '75'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 75
                             },
                             G: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '75'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 75
                             },
                             B: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '75'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 75
                             },
                             SPEED: {
-                                type: ArgumentType.POSITIVE_NUMBER,
-                                defaultValue: '300'
+                               type: ArgumentType.STRING,
+                                menu: 'speed',
+                                defaultValue: '200'
                             }
                         }
                     },
                     {
                         opcode: 'mieo_clearDisplay',
                         blockType: BlockType.COMMAND,
-                        text: 'clear display'
+                        text: 'clear display',
+                        arguments: {}
                     }
                 ],
                 menus: {
-                    emojis: {
+                    emoji: {
                         items: this.EMOJI_MENU
+                    },
+                    speed: {
+                        items: this.SPEED_MENU
                     }
                 }
             },
-
-            // ---- Sensors ----
             {
                 id: 'mieosens',
-                name: 'Sensors',
-                color1: '#FF8C1A',
-                color2: '#DB6E00',
-                color3: '#DB6E00',
-
+                name: 'Sens',
+                color1: '#4CAF50',
+                color2: '#45A049',
+                color3: '#45A049',
                 blocks: [
                     {
                         opcode: 'mieo_isButtonPressed',
                         blockType: BlockType.BOOLEAN,
-                        text: 'button [BUTTON] pressed?',
+                        text: 'is button [BUTTON] pressed',
                         arguments: {
                             BUTTON: {
                                 type: ArgumentType.STRING,
-                                menu: 'buttons',
+                                menu: 'button',
                                 defaultValue: '7'
                             }
                         }
@@ -549,77 +871,74 @@ class OpenBlockMieoDevice {
                     {
                         opcode: 'mieo_isTouchPadPressed',
                         blockType: BlockType.BOOLEAN,
-                        text: 'touch pad [TOUCH] pressed?',
+                        text: 'is touch [TOUCH] pressed',
                         arguments: {
                             TOUCH: {
                                 type: ArgumentType.STRING,
-                                menu: 'touchPads',
-                                defaultValue: '0'
+                                menu: 'touchpad',
+                                defaultValue: TouchPadChannel.T1
                             }
                         }
                     },
                     {
                         opcode: 'mieo_isInfraredActive',
                         blockType: BlockType.BOOLEAN,
-                        text: 'infrared [IR] active?',
+                        text: 'is [IR] active',
                         arguments: {
                             IR: {
                                 type: ArgumentType.STRING,
-                                menu: 'irSensors',
-                                defaultValue: 'A3'
+                                menu: 'infrared',
+                                defaultValue: InfraredSensor.Left
                             }
                         }
                     },
                     {
                         opcode: 'mieo_setInfraredThreshold',
                         blockType: BlockType.COMMAND,
-                        text: 'set infrared [IR] threshold [THRESHOLD]',
+                        text: 'set [IR] threshold [THRESHOLD]',
                         arguments: {
                             IR: {
                                 type: ArgumentType.STRING,
-                                menu: 'irSensors',
-                                defaultValue: 'A3'
+                                menu: 'infrared',
+                                defaultValue: InfraredSensor.Left
                             },
                             THRESHOLD: {
-                                type: ArgumentType.UINT10_NUMBER,
-                                defaultValue: '512'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 512
                             }
                         }
                     },
                     {
                         opcode: 'mieo_getInfraredValue',
                         blockType: BlockType.REPORTER,
-                        text: 'infrared [IR] value',
+                        text: 'get [IR] value',
                         arguments: {
                             IR: {
                                 type: ArgumentType.STRING,
-                                menu: 'irSensors',
-                                defaultValue: 'A3'
+                                menu: 'infrared',
+                                defaultValue: InfraredSensor.Left
                             }
                         }
                     }
                 ],
                 menus: {
-                    buttons: {
+                    button: {
                         items: this.BUTTON_MENU
                     },
-                    touchPads: {
-                        items: this.TOUCH_MENU
+                    touchpad: {
+                        items: this.TOUCHPAD_MENU
                     },
-                    irSensors: {
-                        items: this.IR_MENU
+                    infrared: {
+                        items: this.INFRARED_MENU
                     }
                 }
             },
-
-            // ---- Buzzer ----
             {
                 id: 'mieobuzz',
-                name: 'Buzzer',
-                color1: '#FFAB19',
-                color2: '#EC9C13',
-                color3: '#CF8B17',
-
+                name: 'Buzz',
+                color1: '#9C27B0',
+                color2: '#7B1FA2',
+                color3: '#7B1FA2',
                 blocks: [
                     {
                         opcode: 'mieo_playMusic',
@@ -628,74 +947,72 @@ class OpenBlockMieoDevice {
                         arguments: {
                             SONG: {
                                 type: ArgumentType.STRING,
-                                menu: 'songs',
-                                defaultValue: 'HAPPY_BIRTHDAY'
+                                menu: 'buzzerSong',
+                                defaultValue: BuzzerSong.HappyBirthday
                             }
                         }
                     },
                     {
                         opcode: 'mieo_playTone',
                         blockType: BlockType.COMMAND,
-                        text: 'play note [NOTE] for [DURATION]',
+                        text: 'play tone [NOTE] duration [DURATION]',
                         arguments: {
                             NOTE: {
                                 type: ArgumentType.STRING,
-                                menu: 'notes',
-                                defaultValue: 'C4'
+                                menu: 'buzzerNote',
+                                defaultValue: BuzzerNote.C4
                             },
                             DURATION: {
                                 type: ArgumentType.STRING,
-                                menu: 'durations',
-                                defaultValue: '2'
+                                menu: 'buzzerDuration',
+                                defaultValue: BuzzerDuration.Half
                             }
                         }
                     },
                     {
                         opcode: 'mieo_buzzStop',
                         blockType: BlockType.COMMAND,
-                        text: 'stop buzzer'
+                        text: 'buzz stop',
+                        arguments: {}
                     }
                 ],
                 menus: {
-                    songs: {
-                        items: this.SONG_MENU
+                    buzzerSong: {
+                        items: this.BUZZER_SONG_MENU
                     },
-                    notes: {
-                        items: this.NOTE_MENU
+                    buzzerNote: {
+                        items: this.BUZZER_NOTE_MENU
                     },
-                    durations: {
-                        items: this.DURATION_MENU
+                    buzzerDuration: {
+                        items: this.BUZZER_DURATION_MENU
                     }
                 }
             },
-
-            // ---- Motor ----
             {
                 id: 'mieomotor',
                 name: 'Motor',
-                color1: '#59C059',
-                color2: '#389438',
-                color3: '#389438',
-
+                color1: '#E91E63',
+                color2: '#C2185B',
+                color3: '#C2185B',
                 blocks: [
                     {
                         opcode: 'mieo_runMotor',
                         blockType: BlockType.COMMAND,
-                        text: 'run [SIDE] motor [DIR] speed [SPEED]',
+                        text: 'run [SIDE] motor [DIR] at speed [SPEED]',
                         arguments: {
                             SIDE: {
                                 type: ArgumentType.STRING,
-                                menu: 'motorSides',
-                                defaultValue: 'L'
+                                menu: 'motorSide',
+                                defaultValue: MotorSide.Left
                             },
                             DIR: {
                                 type: ArgumentType.STRING,
-                                menu: 'motorDirections',
-                                defaultValue: 'FORWARD'
+                                menu: 'motorDir',
+                                defaultValue: Direction.Forward
                             },
                             SPEED: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '100'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 100
                             }
                         }
                     },
@@ -706,12 +1023,11 @@ class OpenBlockMieoDevice {
                         arguments: {
                             SIDE: {
                                 type: ArgumentType.STRING,
-                                menu: 'motorSides',
-                                defaultValue: 'L'
+                                menu: 'motorSide',
+                                defaultValue: MotorSide.Left
                             }
                         }
                     },
-                    '---',
                     {
                         opcode: 'mieo_setServoAngle',
                         blockType: BlockType.COMMAND,
@@ -719,78 +1035,76 @@ class OpenBlockMieoDevice {
                         arguments: {
                             SERVO: {
                                 type: ArgumentType.STRING,
-                                menu: 'servos',
-                                defaultValue: '1'
+                                menu: 'servo',
+                                defaultValue: ServoPort.Servo1
                             },
                             ANGLE: {
-                                type: ArgumentType.HALF_ANGLE,
-                                defaultValue: '90'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 90
                             }
                         }
                     }
                 ],
                 menus: {
-                    motorSides: {
+                    motorSide: {
                         items: this.MOTOR_SIDE_MENU
                     },
-                    motorDirections: {
+                    motorDir: {
                         items: this.MOTOR_DIR_MENU
                     },
-                    servos: {
+                    servo: {
                         items: this.SERVO_MENU
                     }
                 }
             },
-
-            // ---- Robot ----
             {
                 id: 'mieorobo',
-                name: 'Robot',
-                color1: '#4C97FF',
-                color2: '#3373CC',
-                color3: '#3373CC',
-
+                name: 'Robo',
+                color1: '#009688',
+                color2: '#00796B',
+                color3: '#00796B',
                 blocks: [
                     {
                         opcode: 'mieo_runRobot',
                         blockType: BlockType.COMMAND,
-                        text: 'run robot [DIR] speed [SPEED]',
+                        text: 'go [DIR] speed [SPEED]',
                         arguments: {
                             DIR: {
                                 type: ArgumentType.STRING,
-                                menu: 'directions',
-                                defaultValue: 'FORWARD'
+                                menu: 'direction',
+                                defaultValue: Direction.Forward
                             },
                             SPEED: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '100'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 100
                             }
                         }
                     },
                     {
                         opcode: 'mieo_goForwardFor1s',
                         blockType: BlockType.COMMAND,
-                        text: 'go [DIR] speed [SPEED] for [DELAY] seconds',
+                        text: 'go [DIR] speed [SPEED] for [DELAY] sec',
                         arguments: {
                             DIR: {
                                 type: ArgumentType.STRING,
-                                menu: 'directions',
-                                defaultValue: 'FORWARD'
+                                menu: 'direction',
+                                defaultValue: Direction.Forward
                             },
                             SPEED: {
-                                type: ArgumentType.UINT8_NUMBER,
-                                defaultValue: '100'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 100
                             },
                             DELAY: {
-                                type: ArgumentType.POSITIVE_NUMBER,
-                                defaultValue: '1'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 1
                             }
                         }
                     },
                     {
                         opcode: 'mieo_stopRobot',
                         blockType: BlockType.COMMAND,
-                        text: 'stop mieo'
+                        text: 'stop mieo',
+                        arguments: {}
                     },
                     {
                         opcode: 'mieo_setOrientation',
@@ -799,68 +1113,64 @@ class OpenBlockMieoDevice {
                         arguments: {
                             ORIENTATION: {
                                 type: ArgumentType.STRING,
-                                menu: 'orientations',
-                                defaultValue: '0'
+                                menu: 'orientation',
+                                defaultValue: Orientation.Horizontal
                             }
                         }
                     }
                 ],
                 menus: {
-                    directions: {
+                    direction: {
                         items: this.DIRECTION_MENU
                     },
-                    orientations: {
+                    orientation: {
                         items: this.ORIENTATION_MENU
                     }
                 }
             },
-
-            // ---- Line Following ----
             {
                 id: 'mieoline',
-                name: 'Line Follow',
-                color1: '#CF63CF',
-                color2: '#C94FC9',
-                color3: '#BD42BD',
-
+                name: 'Line Following',
+                color1: '#3F51B5',
+                color2: '#303F9F',
+                color3: '#303F9F',
                 blocks: [
                     {
                         opcode: 'mieo_setLineThresholds',
                         blockType: BlockType.COMMAND,
-                        text: 'set line thresholds left [LEFT] right [RIGHT]',
+                        text: 'set ir threshold L [LEFT] R [RIGHT]',
                         arguments: {
                             LEFT: {
-                                type: ArgumentType.UINT10_NUMBER,
-                                defaultValue: '512'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 512
                             },
                             RIGHT: {
-                                type: ArgumentType.UINT10_NUMBER,
-                                defaultValue: '512'
+                                type: ArgumentType.NUMBER,
+                                defaultValue: 512
                             }
                         }
                     },
                     {
                         opcode: 'mieo_followLine',
                         blockType: BlockType.COMMAND,
-                        text: 'follow line'
+                        text: 'line follow',
+                        arguments: {}
                     },
                     {
                         opcode: 'mieo_isOnTrack',
                         blockType: BlockType.BOOLEAN,
-                        text: 'mieo on track'
+                        text: 'mieo on track',
+                        arguments: {}
                     }
                 ],
                 menus: {}
             },
-
-            // ---- Ultrasonic ----
             {
                 id: 'mieoultrasonic',
                 name: 'Ultrasonic',
-                color1: '#5CB1D6',
-                color2: '#47A0C7',
-                color3: '#3D8EB5',
-
+                color1: '#00BCD4',
+                color2: '#0097A7',
+                color3: '#0097A7',
                 blocks: [
                     {
                         opcode: 'mieo_connectUltrasonic',
@@ -869,64 +1179,62 @@ class OpenBlockMieoDevice {
                         arguments: {
                             ULTRA: {
                                 type: ArgumentType.STRING,
-                                menu: 'ultrasonics',
-                                defaultValue: '1'
+                                menu: 'ultrasonic',
+                                defaultValue: UltrasonicPort.Port1
                             },
                             TRIG: {
                                 type: ArgumentType.STRING,
-                                menu: 'digitalPins',
-                                defaultValue: 'A5'
+                                menu: 'ultrasonicPins',
+                                defaultValue: Pins.D1
                             },
                             ECHO: {
                                 type: ArgumentType.STRING,
-                                menu: 'digitalPins',
-                                defaultValue: 'A4'
+                                menu: 'ultrasonicPins',
+                                defaultValue: Pins.D2
                             }
                         }
                     },
                     {
                         opcode: 'mieo_getUltrasonicDistance',
                         blockType: BlockType.REPORTER,
-                        text: 'ultrasonic [ULTRA] distance (cm)',
+                        text: 'get ultrasonic [ULTRA] distance (cm)',
                         arguments: {
                             ULTRA: {
                                 type: ArgumentType.STRING,
-                                menu: 'ultrasonics',
-                                defaultValue: '1'
+                                menu: 'ultrasonic',
+                                defaultValue: UltrasonicPort.Port1
                             }
                         }
                     }
                 ],
                 menus: {
-                    ultrasonics: {
+                    ultrasonic: {
                         items: this.ULTRASONIC_MENU
                     },
-                    digitalPins: {
-                        items: this.DIGITAL_PINS_MENU
+                    ultrasonicPins: {
+                        items: this.ULTRASONIC_PINS_MENU
                     }
                 }
             },
-
-            // ---- Bluetooth / App Controls ----
             {
                 id: 'mieoappcontrols',
-                name: 'Bluetooth',
-                color1: '#0FBD8C',
-                color2: '#0DA57A',
-                color3: '#0B8E69',
-
+                name: 'App Controls',
+                color1: '#FFC107',
+                color2: '#FFA000',
+                color3: '#FFA000',
                 blocks: [
                     {
                         opcode: 'mieo_setupBluetooth',
                         blockType: BlockType.COMMAND,
-                        text: 'setup Bluetooth'
+                        text: 'set up bluetooth',
+                        arguments: {}
                     },
                     {
                         opcode: 'mieo_refreshBluetooth',
                         blockType: BlockType.COMMAND,
-                        text: 'refresh Bluetooth'
+                        text: 'refresh bluetooth',
+                        arguments: {}
                     },
-                    '---',
                     {
                         opcode: 'mieo_toggleSwitch',
                         blockType: BlockType.BOOLEAN,
@@ -934,27 +1242,27 @@ class OpenBlockMieoDevice {
                         arguments: {
                             STATE: {
                                 type: ArgumentType.STRING,
-                                menu: 'toggleStates',
-                                defaultValue: '1'
+                                menu: 'toggleState',
+                                defaultValue: ToggleState.On
                             }
                         }
                     },
                     {
                         opcode: 'mieo_isBtButton',
                         blockType: BlockType.BOOLEAN,
-                        text: 'bluetooth button [BUTTON]?',
+                        text: 'is [BUTTON] pressed',
                         arguments: {
                             BUTTON: {
                                 type: ArgumentType.STRING,
-                                menu: 'btButtons',
-                                defaultValue: 'F'
+                                menu: 'bluetoothButton',
+                                defaultValue: BluetoothButton.Up
                             }
                         }
                     },
                     {
                         opcode: 'mieo_btStringEquals',
                         blockType: BlockType.BOOLEAN,
-                        text: 'bluetooth string equals [TEXT]',
+                        text: 'if terminal data is [TEXT]',
                         arguments: {
                             TEXT: {
                                 type: ArgumentType.STRING,
@@ -962,11 +1270,10 @@ class OpenBlockMieoDevice {
                             }
                         }
                     },
-                    '---',
                     {
                         opcode: 'mieo_putToTerminal',
                         blockType: BlockType.COMMAND,
-                        text: 'send [TEXT] to terminal',
+                        text: 'put [TEXT] to terminal',
                         arguments: {
                             TEXT: {
                                 type: ArgumentType.STRING,
@@ -976,28 +1283,25 @@ class OpenBlockMieoDevice {
                     }
                 ],
                 menus: {
-                    toggleStates: {
-                        items: this.TOGGLE_MENU
+                    toggleState: {
+                        items: this.TOGGLE_STATE_MENU
                     },
-                    btButtons: {
-                        items: this.BT_BUTTON_MENU
+                    bluetoothButton: {
+                        items: this.BLUETOOTH_BUTTON_MENU
                     }
                 }
             },
-
-            // ---- Serial ----
             {
                 id: 'mieoSerial',
                 name: 'Serial',
-                color1: '#9966FF',
-                color2: '#774DCB',
-                color3: '#774DCB',
-
+                color1: '#795548',
+                color2: '#5D4037',
+                color3: '#5D4037',
                 blocks: [
                     {
                         opcode: 'mieo_enableSerial',
                         blockType: BlockType.COMMAND,
-                        text: 'enable serial baudrate [BAUD]',
+                        text: 'enable serial baud [BAUD]',
                         arguments: {
                             BAUD: {
                                 type: ArgumentType.STRING,
@@ -1009,7 +1313,7 @@ class OpenBlockMieoDevice {
                     {
                         opcode: 'mieo_writeSerial',
                         blockType: BlockType.COMMAND,
-                        text: 'serial print [VALUE] [EOL]',
+                        text: 'write [VALUE] serial [EOL]',
                         arguments: {
                             VALUE: {
                                 type: ArgumentType.STRING,
@@ -1024,21 +1328,21 @@ class OpenBlockMieoDevice {
                     },
                     {
                         opcode: 'mieo_byteAvailable',
-                        blockType: BlockType.REPORTER,
-                        text: 'serial available',
-                        disableMonitor: true
+                        blockType: BlockType.BOOLEAN,
+                        text: 'byte available',
+                        arguments: {}
                     },
                     {
                         opcode: 'mieo_readAsString',
                         blockType: BlockType.REPORTER,
-                        text: 'serial read string',
-                        disableMonitor: true
+                        text: 'read as string',
+                        arguments: {}
                     },
                     {
                         opcode: 'mieo_readAsNumber',
                         blockType: BlockType.REPORTER,
-                        text: 'serial read number',
-                        disableMonitor: true
+                        text: 'read as number',
+                        arguments: {}
                     }
                 ],
                 menus: {
@@ -1053,81 +1357,331 @@ class OpenBlockMieoDevice {
         ];
     }
 
-    // ---- Block handler stubs ----
-
+    /**
+     * Set pin digital output.
+     */
     mieo_setDigitalOutput (args) {
         this._peripheral.setDigitalOutput(args.PIN, args.LEVEL);
         return Promise.resolve();
     }
 
+    /**
+     * Set digital pin HIGH/LOW.
+     */
     mieo_setDigitalPinHighLow (args) {
         this._peripheral.setDigitalOutput(args.PIN, args.LEVEL);
         return Promise.resolve();
     }
 
+    /**
+     * Read pin digital level.
+     */
     mieo_readDigitalPin (args) {
         return this._peripheral.readDigitalPin(args.PIN);
     }
 
+    /**
+     * Read digital pin as boolean.
+     */
     mieo_readDigitalPinBoolean (args) {
         return this._peripheral.readDigitalPin(args.PIN);
     }
 
+    /**
+     * Read analog sensor and return as string.
+     */
     mieo_readAnalogSensorString (args) {
         return this._peripheral.readAnalogPin(args.PIN);
     }
 
+    /**
+     * Read analog pin.
+     */
     mieo_readAnalogPin (args) {
         return this._peripheral.readAnalogPin(args.PIN);
     }
 
+    /**
+     * Set pin pwm output.
+     */
     mieo_setPwmOutput (args) {
         this._peripheral.setPwmOutput(args.PIN, args.OUT);
         return Promise.resolve();
     }
 
+    /**
+     * Show emotion on Mieo LED matrix (Arduino mode only).
+     */
+    mieo_showEmotion () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Show emotion on Mieo LED matrix with default color mapping (Arduino mode only).
+     */
+    mieo_showEmotionFixed () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Display text on Mieo LED matrix (Arduino mode only).
+     */
+    mieo_displayText () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Clear Mieo LED matrix (Arduino mode only).
+     */
+    mieo_clearDisplay () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Display number on Mieo LED matrix with default red color (Arduino mode only).
+     */
+    mieo_showNumber () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Display number on Mieo LED matrix with color (Arduino mode only).
+     */
+    mieo_showNumberColor () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Set servo output.
+     */
     mieo_setServoOutput (args) {
         this._peripheral.setServoOutput(args.PIN, args.OUT);
         return Promise.resolve();
     }
 
-    mieo_showEmotion () { return Promise.resolve(); }
-    mieo_showEmotionFixed () { return Promise.resolve(); }
-    mieo_displayText () { return Promise.resolve(); }
-    mieo_clearDisplay () { return Promise.resolve(); }
-    mieo_showNumberColor () { return Promise.resolve(); }
-    mieo_runRobot () { return Promise.resolve(); }
-    mieo_goForwardFor1s () { return Promise.resolve(); }
-    mieo_setOrientation () { return Promise.resolve(); }
-    mieo_stopRobot () { return Promise.resolve(); }
-    mieo_isButtonPressed () { return Promise.resolve(false); }
-    mieo_isTouchPadPressed () { return Promise.resolve(false); }
-    mieo_isInfraredActive () { return Promise.resolve(false); }
-    mieo_setInfraredThreshold () { return Promise.resolve(); }
-    mieo_getInfraredValue () { return Promise.resolve(0); }
-    mieo_runMotor () { return Promise.resolve(); }
-    mieo_stopMotor () { return Promise.resolve(); }
-    mieo_setServoAngle () { return Promise.resolve(); }
-    mieo_setLineThresholds () { return Promise.resolve(); }
-    mieo_followLine () { return Promise.resolve(); }
-    mieo_isOnTrack () { return Promise.resolve(false); }
-    mieo_connectUltrasonic () { return Promise.resolve(); }
-    mieo_getUltrasonicDistance () { return Promise.resolve(0); }
-    mieo_playMusic () { return Promise.resolve(); }
-    mieo_playTone () { return Promise.resolve(); }
-    mieo_buzzStop () { return Promise.resolve(); }
-    mieo_setupBluetooth () { return Promise.resolve(); }
-    mieo_refreshBluetooth () { return Promise.resolve(); }
-    mieo_toggleSwitch () { return Promise.resolve(false); }
-    mieo_isBtButton () { return Promise.resolve(false); }
-    mieo_btStringEquals () { return Promise.resolve(false); }
-    mieo_putToTerminal () { return Promise.resolve(); }
-    mieo_enableSerial () { return Promise.resolve(); }
-    mieo_writeSerial () { return Promise.resolve(); }
-    mieo_byteAvailable () { return Promise.resolve(false); }
-    mieo_readAsString () { return Promise.resolve(''); }
-    mieo_readAsNumber () { return Promise.resolve(0); }
-    event_whenmieostartsup () { return Promise.resolve(); }
+    /**
+     * Run robot movement (Arduino mode only).
+     */
+    mieo_runRobot () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Go forward with speed for 1 second (Arduino mode only).
+     */
+    mieo_goForwardFor1s () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Set Mieo orientation (Arduino mode only).
+     */
+    mieo_setOrientation () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Stop robot (Arduino mode only).
+     */
+    mieo_stopRobot () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Button pressed state (Arduino mode only).
+     */
+    mieo_isButtonPressed () {
+        return Promise.resolve(false);
+    }
+
+    /**
+     * Touch pad pressed state (Arduino mode only).
+     */
+    mieo_isTouchPadPressed () {
+        return Promise.resolve(false);
+    }
+
+    /**
+     * Infrared sensor active (Arduino mode only).
+     */
+    mieo_isInfraredActive () {
+        return Promise.resolve(false);
+    }
+
+    /**
+     * Set infrared sensor threshold (Arduino mode only).
+     */
+    mieo_setInfraredThreshold () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Get infrared sensor value (Arduino mode only).
+     */
+    mieo_getInfraredValue () {
+        return Promise.resolve(0);
+    }
+
+    /**
+     * Run single motor (Arduino mode only).
+     */
+    mieo_runMotor () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Stop single motor (Arduino mode only).
+     */
+    mieo_stopMotor () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Set servo angle (Arduino mode only).
+     */
+    mieo_setServoAngle () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Set line follower thresholds (Arduino mode only).
+     */
+    mieo_setLineThresholds () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Follow line (Arduino mode only).
+     */
+    mieo_followLine () {
+        return Promise.resolve();
+    }
+
+    /**
+     * On track (Arduino mode only).
+     */
+    mieo_isOnTrack () {
+        return Promise.resolve(false);
+    }
+
+    /**
+     * Connect ultrasonic sensor (Arduino mode only).
+     */
+    mieo_connectUltrasonic () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Get ultrasonic distance (Arduino mode only).
+     */
+    mieo_getUltrasonicDistance () {
+        return Promise.resolve(0);
+    }
+
+    /**
+     * Play buzzer music (Arduino mode only).
+     */
+    mieo_playMusic () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Play buzzer tone (Arduino mode only).
+     */
+    mieo_playTone () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Stop buzzer (Arduino mode only).
+     */
+    mieo_buzzStop () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Set up bluetooth (Arduino mode only).
+     */
+    mieo_setupBluetooth () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Refresh bluetooth (Arduino mode only).
+     */
+    mieo_refreshBluetooth () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Toggle switch state (Arduino mode only).
+     */
+    mieo_toggleSwitch () {
+        return Promise.resolve(false);
+    }
+
+    /**
+     * Bluetooth button pressed (Arduino mode only).
+     */
+    mieo_isBtButton () {
+        return Promise.resolve(false);
+    }
+
+    /**
+     * Bluetooth string equals (Arduino mode only).
+     */
+    mieo_btStringEquals () {
+        return Promise.resolve(false);
+    }
+
+    /**
+     * Put text to bluetooth terminal (Arduino mode only).
+     */
+    mieo_putToTerminal () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Enable serial (Arduino mode only).
+     */
+    mieo_enableSerial () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Write serial (Arduino mode only).
+     */
+    mieo_writeSerial () {
+        return Promise.resolve();
+    }
+
+    /**
+     * Byte available (Arduino mode only).
+     */
+    mieo_byteAvailable () {
+        return Promise.resolve(false);
+    }
+
+    /**
+     * Read as string (Arduino mode only).
+     */
+    mieo_readAsString () {
+        return Promise.resolve('');
+    }
+
+    /**
+     * Read as number (Arduino mode only).
+     */
+    mieo_readAsNumber () {
+        return Promise.resolve(0);
+    }
+
+    /**
+     * When Mieo starts up - HAT block for setup code
+     */
+    event_whenmieostartsup () {
+        return Promise.resolve();
+    }
 }
 
 module.exports = OpenBlockMieoDevice;

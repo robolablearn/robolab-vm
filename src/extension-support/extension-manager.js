@@ -748,6 +748,10 @@ class ExtensionManager {
 
         // TODO: Fix this to use dispatch.call when extensions are running in workers.
         const menuFunc = extensionObject[menuItemFunctionName];
+        if (typeof menuFunc !== 'function') {
+            log.warn(`Missing menu function "${menuItemFunctionName}" on extension ${extensionObject && extensionObject.constructor ? extensionObject.constructor.name : 'unknown'}`);
+            return [];
+        }
         const menuItems = menuFunc.call(extensionObject, editingTargetID).map(
             item => {
                 item = maybeFormatMessage(item, extensionMessageContext);
