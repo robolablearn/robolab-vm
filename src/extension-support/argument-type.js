@@ -114,6 +114,11 @@ const ArgumentType = {
     MATRIX8X12: 'matrix8x12',
 
     /**
+     * 7x5 matrix, matching the Mieo LED panel.
+     */
+    MATRIX7X5: 'matrix7x5',
+
+    /**
      * MIDI note number with note picker (piano) field
      */
     NOTE: 'note'

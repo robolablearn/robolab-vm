@@ -31,8 +31,17 @@ class Serialport extends JSONRPC {
         this._deviceId = deviceId;
         this._peripheralOptions = peripheralOptions;
         this._runtime = runtime;
+        this._onPeripheralList = null;
 
         this._socket.open();
+    }
+
+    /**
+     * Hand the discovered peripherals somewhere other than straight to the GUI.
+     * @param {?Function} callback - receives the map of available peripherals.
+     */
+    setOnPeripheralList (callback) {
+        this._onPeripheralList = callback;
     }
 
     /**
@@ -69,6 +78,25 @@ class Serialport extends JSONRPC {
             .catch(e => {
                 this._handleRequestError(e);
             });
+    }
+
+    /**
+     * Stop looking for serial ports, without announcing a disconnection.
+     *
+     * For a device that can also be reached another way: once the user picks
+     * the other kind, the port scan is over, but saying "disconnected" here
+     * would contradict the connection being made at that very moment.
+     */
+    stopDiscovery () {
+        if (this._discoverTimeoutID) {
+            window.clearTimeout(this._discoverTimeoutID);
+            this._discoverTimeoutID = null;
+        }
+        // handleDisconnectError bails out when nothing was connected, so
+        // closing here stays silent.
+        if (this._socket.isOpen()) {
+            this._socket.close();
+        }
     }
 
     /**
@@ -192,10 +220,17 @@ class Serialport extends JSONRPC {
         switch (method) {
         case 'didDiscoverPeripheral':
             this._availablePeripherals[params.peripheralId] = params;
-            this._runtime.emit(
-                this._runtime.constructor.PERIPHERAL_LIST_UPDATE,
-                this._availablePeripherals
-            );
+            if (this._onPeripheralList) {
+                // Someone else is assembling the list -- a device that can also
+                // be reached another way, and wants both kinds in one list
+                // rather than each transport overwriting the other's.
+                this._onPeripheralList(this._availablePeripherals);
+            } else {
+                this._runtime.emit(
+                    this._runtime.constructor.PERIPHERAL_LIST_UPDATE,
+                    this._availablePeripherals
+                );
+            }
             if (this._discoverTimeoutID) {
                 window.clearTimeout(this._discoverTimeoutID);
             }

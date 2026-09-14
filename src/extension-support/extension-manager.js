@@ -26,7 +26,15 @@ const builtinExtensions = {
     text2speech: () => require('../extensions/scratch3_text2speech'),
     translate: () => require('../extensions/scratch3_translate'),
     videoSensing: () => require('../extensions/scratch3_video_sensing'),
-    makeymakey: () => require('../extensions/scratch3_makeymakey')
+    makeymakey: () => require('../extensions/scratch3_makeymakey'),
+    faceSense: () => require('../extensions/scratch3_face_sense'),
+    objectSense: () => require('../extensions/scratch3_object_sense'),
+    bodySense: () => require('../extensions/scratch3_body_sense'),
+    speechSense: () => require('../extensions/scratch3_speech_sense'),
+    scanSense: () => require('../extensions/scratch3_scan_sense'),
+    weatherSense: () => require('../extensions/scratch3_weather_sense'),
+    iotCloud: () => require('../extensions/scratch3_iot_cloud'),
+    visionSense: () => require('../extensions/scratch3_vision_sense')
 };
 
 const builtinDevices = {
@@ -46,6 +54,10 @@ const builtinDevices = {
     arduinoUnoR4Wifi: () => require('../devices/arduinoUnoR4Wifi/arduinoUnoR4Wifi'),
     // Esp32
     arduinoEsp32: () => require('../devices/arduinoEsp32/arduinoEsp32'),
+    // Esp32 MicroPython
+    // Mieo custom board
+    mieo: () => require('../devices/esp32MicroPython/esp32MicroPython'),
+    esp32MicroPython: () => require('../devices/esp32MicroPython/esp32MicroPython'),
     // Esp32-S3
     arduinoEsp32S3: () => require('../devices/arduinoEsp32S3/arduinoEsp32S3'),
     // Esp8266
@@ -63,8 +75,6 @@ const builtinDevices = {
     arduinoRaspberryPiPico2: () => require('../devices/arduinoRaspberryPiPico2/arduinoRaspberryPiPico2'),
     // Raspberry Pi Pico 2W
     arduinoRaspberryPiPico2W: () => require('../devices/arduinoRaspberryPiPico2W/arduinoRaspberryPiPico2W'),
-    // Mieo
-    mieo: () => require('../devices/mieo/mieo'),
     // Microbit
     microbit: () => require('../devices/microbit/microbit'),
     microbitV2: () => require('../devices/microbit/microbitV2')
@@ -271,16 +281,43 @@ class ExtensionManager {
      * @param {string} extensionURL - the URL for the extension to load OR the ID of an internal extension
      */
     unloadExtension (extensionURL) {
+        const serviceName = this._loadedExtensions.get(extensionURL);
         this._loadedExtensions.delete(extensionURL);
         this.runtime.removeScratchExtension(extensionURL);
+        this._disposeInternalExtension(serviceName);
     }
 
     /**
      * Unload all extension
      */
     clearExtensions () {
+        const serviceNames = Array.from(this._loadedExtensions.values());
         this._loadedExtensions.clear();
         this.runtime.clearScratchExtension();
+        serviceNames.forEach(serviceName => this._disposeInternalExtension(serviceName));
+    }
+
+    /**
+     * Let a built-in extension that has been unloaded give back what it holds --
+     * a microphone, workers, models, timers, stage layers -- and forget it, so
+     * that loading it again makes one fresh instance rather than a second live
+     * one beside the first. Extensions without a dispose method are simply
+     * forgotten; extensions hosted in workers are left alone.
+     * @param {string} serviceName - the dispatch service the extension was registered as.
+     * @private
+     */
+    _disposeInternalExtension (serviceName) {
+        if (!serviceName || !dispatch.services) return;
+        const instance = dispatch.services[serviceName];
+        if (!instance || typeof instance.getInfo !== 'function') return;
+        if (typeof instance.dispose === 'function') {
+            try {
+                instance.dispose();
+            } catch (err) {
+                log.warn(`Extension ${serviceName} did not dispose cleanly: ${err}`);
+            }
+        }
+        delete dispatch.services[serviceName];
     }
 
     /**
@@ -677,13 +714,14 @@ class ExtensionManager {
             category.blocks = category.blocks.reduce((results, blockInfo) => {
                 try {
                     let result;
-                    switch (blockInfo) {
-                    case '---': // separator
+                    if (blockInfo === '---') { // separator
                         result = '---';
-                        break;
-                    default: // an ExtensionBlockMetadata object
+                    } else if (blockInfo.blockType === BlockType.LABEL) {
+                        // A heading carries no opcode, so it skips
+                        // _prepareBlockInfo, which would invent one for it.
+                        result = blockInfo;
+                    } else { // an ExtensionBlockMetadata object
                         result = this._prepareBlockInfo(serviceName, blockInfo);
-                        break;
                     }
                     results.push(result);
                 } catch (e) {
@@ -747,12 +785,21 @@ class ExtensionManager {
         const extensionMessageContext = this.runtime.makeMessageContextForTarget(editingTarget);
 
         // TODO: Fix this to use dispatch.call when extensions are running in workers.
+        if (!extensionObject) {
+            log.warn(`Missing extension object for dynamic menu function "${menuItemFunctionName}"`);
+            return [];
+        }
         const menuFunc = extensionObject[menuItemFunctionName];
         if (typeof menuFunc !== 'function') {
             log.warn(`Missing menu function "${menuItemFunctionName}" on extension ${extensionObject && extensionObject.constructor ? extensionObject.constructor.name : 'unknown'}`);
             return [];
         }
-        const menuItems = menuFunc.call(extensionObject, editingTargetID).map(
+        const menuRawItems = menuFunc.call(extensionObject, editingTargetID) || [];
+        if (!Array.isArray(menuRawItems)) {
+            log.warn(`Extension menu did not return an array: ${menuItemFunctionName}`);
+            return [];
+        }
+        const menuItems = menuRawItems.map(
             item => {
                 item = maybeFormatMessage(item, extensionMessageContext);
                 switch (typeof item) {
@@ -769,7 +816,8 @@ class ExtensionManager {
             });
 
         if (!menuItems || menuItems.length < 1) {
-            throw new Error(`Extension menu returned no items: ${menuItemFunctionName}`);
+            log.warn(`Extension menu returned no items: ${menuItemFunctionName}`);
+            return [];
         }
         return menuItems;
     }

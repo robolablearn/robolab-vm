@@ -186,6 +186,12 @@ const ArgumentTypeMap = (() => {
             fieldName: 'MATRIX'
         }
     };
+    map[ArgumentType.MATRIX7X5] = {
+        shadow: {
+            type: 'matrix7x5',
+            fieldName: 'MATRIX'
+        }
+    };
     map[ArgumentType.NOTE] = {
         shadow: {
             type: 'note',
@@ -1339,6 +1345,10 @@ class Runtime extends EventEmitter {
             return this._convertSeparatorForScratchBlocks(blockInfo);
         }
 
+        if (blockInfo.blockType === BlockType.LABEL) {
+            return this._convertLabelForScratchBlocks(blockInfo);
+        }
+
         if (blockInfo.blockType === BlockType.BUTTON) {
             return this._convertButtonForScratchBlocks(blockInfo);
         }
@@ -1503,6 +1513,23 @@ class Runtime extends EventEmitter {
      * @returns {ConvertedBlockInfo} - the converted & original block information
      * @private
      */
+    /**
+     * Convert a heading into the flyout xml for it.
+     *
+     * scratch-blocks already renders <label> in a flyout -- it builds a
+     * FlyoutButton with isLabel set, styled as a heading -- so a category can
+     * group its blocks under headings without any new rendering code.
+     * @param {ExtensionBlockMetadata} blockInfo - the label to convert.
+     * @returns {ConvertedBlockInfo} - the converted label information.
+     * @private
+     */
+    _convertLabelForScratchBlocks (blockInfo) {
+        return {
+            info: blockInfo,
+            xml: `<label text="${xmlEscape(maybeFormatMessage(blockInfo.text))}"></label>`
+        };
+    }
+
     _convertSeparatorForScratchBlocks (blockInfo) {
         return {
             info: blockInfo,
@@ -1716,15 +1743,27 @@ class Runtime extends EventEmitter {
             // If blocks is empty return a empty xml to avoid empty category.
             let blocksNotEmpty = false;
             paletteBlocks.forEach(block => {
-                if (block.info !== '---') {
+                if (block.info !== '---' && block.info.blockType !== BlockType.LABEL) {
                     blocksNotEmpty = true;
                 }
             });
+            // A block can ask to be greyed out in a program mode rather than
+            // hidden by `programMode`, so learners can still see it exists.
+            const currentProgramMode = this.isRealtimeMode() ?
+                ProgramModeType.REALTIME : ProgramModeType.UPLOAD;
+            const blockXML = block => {
+                if (block.info && block.info.disabledInProgramMode &&
+                    block.info.disabledInProgramMode.includes(currentProgramMode)) {
+                    return block.xml.replace('<block ', '<block disabled="true" ');
+                }
+                return block.xml;
+            };
+
             if (blocksNotEmpty){
                 return {
                     id: categoryInfo.id,
                     xml: `<category name="${name}" id="${categoryInfo.id}" ${statusButtonXML} ${colorXML}
-                    ${menuIconXML}>${paletteBlocks.map(block => block.xml).join('')}</category>`
+                    ${menuIconXML}>${paletteBlocks.map(blockXML).join('')}</category>`
                 };
             }
             return {
@@ -1899,11 +1938,38 @@ class Runtime extends EventEmitter {
      * @param {string} deviceId - the id of the device.
      * @param {string} code - the code to upload.
      */
+    /**
+     * Which device blocks declare `disabledInProgramMode`, and whether each one
+     * is disabled right now. The toolbox greys them out on its own, but blocks
+     * already sitting in the workspace have to be updated by the editor, which
+     * needs to know both what to grey and what to un-grey on the way back.
+     * @return {object} - map of block type to whether it is disabled now.
+     */
+    getProgramModeBlockDisableMap () {
+        const mode = this.isRealtimeMode() ? ProgramModeType.REALTIME : ProgramModeType.UPLOAD;
+        const map = {};
+        (this._deviceBlockInfo || []).forEach(categoryInfo => {
+            (categoryInfo.blocks || []).forEach(block => {
+                if (block.info && block.info.disabledInProgramMode && block.json) {
+                    map[block.json.type] = block.info.disabledInProgramMode.includes(mode);
+                }
+            });
+        });
+        return map;
+    }
+
     uploadToPeripheral (deviceId, code) {
         deviceId = this.analysisRealDeviceId(deviceId);
 
         if (this.peripheralExtensions[deviceId]) {
             this.peripheralExtensions[deviceId].upload(code);
+        } else {
+            // Silently doing nothing here leaves the upload dialog spinning
+            // until its 60s watchdog fires, with no clue why. It means the
+            // selected device id never registered a peripheral -- a renamed
+            // device id, or a device module that threw while loading.
+            log.error(`Cannot upload: no peripheral registered for device "${deviceId}". ` +
+                `Registered devices: ${Object.keys(this.peripheralExtensions).join(', ') || '(none)'}`);
         }
     }
 
@@ -2657,8 +2723,14 @@ class Runtime extends EventEmitter {
      * @param {string} id id of this device extension.
      */
     removeScratchExtension (id) {
-        this._blockInfo.splice(this._blockInfo.indexOf(id), 1);
-        this._loadedScratchExtensions.splice(this._loadedScratchExtensions.indexOf(id), 1);
+        // _blockInfo holds category objects, not ids, so it is searched by the
+        // category's id. indexOf(id) was always -1, and splice(-1, 1) removed
+        // whichever extension happened to be last in the palette instead.
+        for (let i = this._blockInfo.length - 1; i >= 0; i--) {
+            if (this._blockInfo[i].id === id) this._blockInfo.splice(i, 1);
+        }
+        const loaded = this._loadedScratchExtensions.indexOf(id);
+        if (loaded >= 0) this._loadedScratchExtensions.splice(loaded, 1);
         this.emit(Runtime.SCRATCH_EXTENSION_REMOVED);
     }
 
