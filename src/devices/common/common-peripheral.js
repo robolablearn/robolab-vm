@@ -61,6 +61,11 @@ class CommonPeripheral{
      * @param {string} code - the code want to upload.
      */
     upload (code) {
+        // A Mieo whose Bluetooth connection failed has no serial port either:
+        // choosing the Bluetooth entry gives the port up before connecting.
+        // Every other method here already guards; these three did not, and a
+        // TypeError is a poor way to say "nothing is connected".
+        if (!this._serialport) return;
         const base64Str = Buffer.from(code).toString('base64');
         this._serialport.upload(base64Str, this.diveceOpt, 'base64');
     }
@@ -69,6 +74,7 @@ class CommonPeripheral{
      * Called by the runtime when user wants to upload realtime firmware to a peripheral.
      */
     uploadFirmware () {
+        if (!this._serialport) return;
         this._serialport.uploadFirmware(this.diveceOpt);
     }
 
@@ -77,6 +83,7 @@ class CommonPeripheral{
      * Called by the runtime when user wants to abort the uploading process.
      */
     abortUpload () {
+        if (!this._serialport) return;
         this._serialport.abortUpload();
     }
 
@@ -145,6 +152,10 @@ class CommonPeripheral{
      * @param {number} baudrate - the baudrate.
      */
     setBaudrate (baudrate) {
+        // There may be no serial port at all: a Mieo connected over Bluetooth
+        // drops it, and the editor still sets a baud rate when the program
+        // mode changes. scan() always makes a fresh one, so nothing is lost.
+        if (!this._serialport) return;
         this._serialport.setBaudrate(baudrate);
     }
 

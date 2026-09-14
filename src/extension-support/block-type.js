@@ -22,7 +22,15 @@ const BlockType = {
      * Specialized command block which may or may not run a child branch
      * The thread continues with the next block whether or not a child branch ran.
      */
+
     CONDITIONAL: 'conditional',
+
+    /**
+     * A heading inside a category: not a block, just text above a group of
+     * them. scratch-blocks renders a <label> in the flyout the same way it
+     * renders a button, only styled as a heading.
+     */
+    LABEL: 'label',
 
     /**
      * Specialized hat block with no implementation function

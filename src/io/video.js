@@ -67,6 +67,18 @@ class Video {
     }
 
     /**
+     * Runtime event fired when the camera goes on or off, with true or false.
+     *
+     * The camera has two masters -- blocks and, in the editor, a button beside
+     * the stop sign -- and neither can see what the other did. This is how they
+     * find out.
+     * @type {string}
+     */
+    static get STATE_CHANGED () {
+        return 'VIDEO_STATE_CHANGED';
+    }
+
+    /**
      * Set a video provider for this device. A default implementation of
      * a video provider can be found in scratch-gui/src/lib/video/video-provider
      * @param {VideoProvider} provider - Video provider to use
@@ -84,7 +96,11 @@ class Video {
      */
     enableVideo () {
         if (!this.provider) return null;
-        return this.provider.enableVideo().then(() => this._setupPreview());
+        // Announced only once the picture is actually up: a refused camera
+        // permission rejects here, and that is not the camera being on.
+        return this.provider.enableVideo()
+            .then(() => this._setupPreview())
+            .then(() => this.runtime.emit(Video.STATE_CHANGED, true));
     }
 
     /**
@@ -93,6 +109,7 @@ class Video {
      */
     disableVideo () {
         this._disablePreview();
+        this.runtime.emit(Video.STATE_CHANGED, false);
         if (!this.provider) return null;
         this.provider.disableVideo();
     }
