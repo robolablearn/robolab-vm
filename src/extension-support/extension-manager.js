@@ -259,11 +259,26 @@ class ExtensionManager {
                 return Promise.resolve();
             }
 
-            const extension = builtinExtensions[extensionURL]();
-            const extensionInstance = new extension(this.runtime);
-            const serviceName = this._registerInternalExtension(extensionInstance);
-            this._loadedExtensions.set(extensionURL, serviceName);
-            this.runtime.addScratchExtension(extensionURL);
+            // A built-in extension is constructed synchronously, so anything it
+            // throws -- a missing model file, a camera that will not open, a
+            // runtime the board does not have -- used to escape this function as
+            // a synchronous exception. Callers attach .then()/.catch() to the
+            // return value, which does not exist yet when that happens, so the
+            // failure reached nobody: the editor sat on "Processing..." forever
+            // with no error anywhere. Hand it back as a rejected promise instead.
+            try {
+                const extension = builtinExtensions[extensionURL]();
+                const extensionInstance = new extension(this.runtime);
+                const serviceName = this._registerInternalExtension(extensionInstance);
+                this._loadedExtensions.set(extensionURL, serviceName);
+                this.runtime.addScratchExtension(extensionURL);
+            } catch (err) {
+                // Leave nothing half-registered behind: a second attempt has to
+                // start from scratch rather than trip the "already loaded" guard.
+                this._loadedExtensions.delete(extensionURL);
+                log.error(`Extension ${extensionURL} failed to load: ${err && err.message ? err.message : err}`);
+                return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+            }
             return Promise.resolve();
         }
 
