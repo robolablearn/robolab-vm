@@ -97,15 +97,15 @@ const SERIAL_CONFIG = {
 /**
  * Configuration passed through to openblock-link's uploader (see
  * src/upload/esp32MicroPython.js there). "firmware" is the filename of the
- * MicroPython .bin expected under <tools>/../firmwares/esp32MicroPython/ -
- * download the ESP32 (WROOM-32/32E) build from
- * https://micropython.org/download/ESP32_GENERIC/ and place it there under
- * this exact name (or update this constant to match whatever you download).
+ * MicroPython .bin, looked for in firmwares/microPython/, which
+ * `npm run fetch:firmwares` fills from openblockcc/openblock-firmwares. The
+ * name below is the ESP32 (WROOM-32/32E) generic build that release ships;
+ * change it here if that release starts carrying a different one.
  * @readonly
  */
 const DIVECE_OPT = {
     type: 'esp32MicroPython',
-    firmware: 'ESP32_GENERIC-20240602-v1.23.0.bin'
+    firmware: 'ESP32_GENERIC-20250415-v1.25.0.bin'
 };
 
 /**
